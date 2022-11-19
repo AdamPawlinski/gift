@@ -3,11 +3,9 @@ export default function showResults(drawResultArr, person) {
     console.warn('Start lottery first')
     return
   }
-  console.log('result:', drawResultArr);
   const result = drawResultArr.find(
     res => {
-      console.log(Object.keys(res).toString() === person, person);
-      Object.keys(res).toString() === person
+      return Object.keys(res).toString() === person
     }
   );
   

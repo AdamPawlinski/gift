@@ -31,5 +31,6 @@ export default function draw() {
   }
   localStorage.setItem('draw', JSON.stringify(drawResultArr))
   drawResultsState = JSON.parse(localStorage.getItem('draw'))
+  console.log(drawResultArr);
   return drawResultArr;
 }

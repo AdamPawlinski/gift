@@ -5,7 +5,7 @@
       d="flex"
       justify-content="flex-end"
     >
-      <CButton mr="3" @click="onClickStartLotteryHandler">
+      <CButton mr="3" @click="onClickStartLotteryHandler(false)">
         Start lottery
       </CButton>
       <CIconButton
@@ -32,8 +32,8 @@
         <CFormControl is-required >
           <CFormLabel for="fname">Imię</CFormLabel>
           <CInput id="fname" placeholder="First name" @change.prevent="setName"/>
-          <CFormLabel for="sname">Nazwisko</CFormLabel>
-          <CInput id="sname" placeholder="Last name" />
+          <!-- <CFormLabel for="sname">Nazwisko</CFormLabel>
+          <CInput id="sname" placeholder="Last name" /> -->
           <CButton
             loading-text="Submitting"
             variant-color="blue"
@@ -46,29 +46,47 @@
           </CButton>
         </CFormControl>
         
-        <CModal :is-open="showModal">
+        <CModal :is-open="showModalLottery">
           <CModalOverlay />
-          <CModalContent>
-            <CModalHeader>The lottery is finished</CModalHeader>
+          <CModalContent v-if="!startLottery">
+            <CModalHeader>Czy chcesz rozpocząć nowe losowanie?</CModalHeader>
+            <CModalBody>
+              <CButton @click="onClickStartLotteryHandler(true)">
+                Tak
+              </CButton>
+              
+              <CButton @click="showModalLottery = false">
+                Nie
+              </CButton>
+            </CModalBody>
             <CModalFooter>
-              <CButton @click="showModal = false">
+              <CButton @click="showModalLottery = false">
                 Cancel
               </CButton>
             </CModalFooter>
-            <CModalCloseButton @click="showModal = false" />
+            <CModalCloseButton @click="showModalLottery = false" />
+          </CModalContent>
+          <CModalContent v-else>
+            <CModalHeader>The lottery is finished</CModalHeader>
+            <CModalFooter>
+              <CButton @click="showModalLottery = false">
+                Cancel
+              </CButton>
+            </CModalFooter>
+            <CModalCloseButton @click="showModalLottery = false" />
           </CModalContent>
         </CModal>
-        <CModal :is-open="!!drawPick">
+        <CModal :is-open="showModalResult">
           <CModalOverlay />
           <CModalContent>
             <CModalHeader>Wylosowałaś/eś</CModalHeader>
             <CModalBody>{{drawPick}}</CModalBody>
             <CModalFooter>
-              <CButton @click="showModal = false">
+              <CButton @click="showModalResult = false">
                 Cancel
               </CButton>
             </CModalFooter>
-            <CModalCloseButton @click="showModal = false" />
+            <CModalCloseButton @click="showModalResult = false" />
           </CModalContent>
         </CModal>
       </CFlex>
@@ -117,7 +135,10 @@ export default {
   inject: ['$chakraColorMode', '$toggleColorMode'],
   data () {
     return {
-      showModal: false,
+      showModalLottery: false,
+      showModalResult: false,
+      startLottery: false,
+      lotteryFinished: false, 
       results: [],
       person: '',
       drawPick: '',
@@ -147,14 +168,17 @@ export default {
   methods: {
     onClickSubmitHandler() {
       this.drawPick = showResults(this.results, this.person);
+      this.showModalResult = true;
     },
-    onClickStartLotteryHandler() {      
-      this.results = draw();
-      this.showModal = true;
-      console.log(this.results)
+    onClickStartLotteryHandler(startLottery) {      
+      if (!startLottery) {
+        this.showModalLottery = true
+      } else {
+        this.startLottery = true;
+        this.results = draw();        
+      }
     },
     setName(e) {
-      console.log(e.target.value)
       this.person = e.target.value;
     }
   }
