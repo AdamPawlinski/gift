@@ -8,8 +8,10 @@ export default function showResults(drawResultArr, person) {
       return Object.keys(res).toString() === person
     }
   );
-  
-  const personPicked = Object.values(result).toString();
-  
-  return personPicked;
+  let personPicked;
+  if (result) {
+    return personPicked = Object.values(result).toString();
+  } else {
+    return personPicked = "Nie znaleziono imienia";
+  }
 }

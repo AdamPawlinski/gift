@@ -69,11 +69,11 @@
           <CModalContent v-else>
             <CModalHeader>The lottery is finished</CModalHeader>
             <CModalFooter>
-              <CButton @click="showModalLottery = false">
+              <CButton @click="showModalLottery = false; startLottery = false">
                 Cancel
               </CButton>
             </CModalFooter>
-            <CModalCloseButton @click="showModalLottery = false" />
+            <CModalCloseButton @click="showModalLottery = false; startLottery = false" />
           </CModalContent>
         </CModal>
         <CModal :is-open="showModalResult">
@@ -174,6 +174,7 @@ export default {
       if (!startLottery) {
         this.showModalLottery = true
       } else {
+        this.results= [];
         this.startLottery = true;
         this.results = draw();        
       }

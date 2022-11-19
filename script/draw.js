@@ -7,12 +7,13 @@ let userTabStart = [
   "Grzegorz",
   "Karolina",
 ];
-let drawResult;
-let drawResultArr = [];
-let drawResultsState = [];
 
 export default function draw() {  
+  let drawResult;
+  let drawResultArr = [];
+  let drawResultsState = [];
   let drawUserTab = userTabStart.slice();
+  console.log(drawUserTab);
   if (userTabStart.length < 2) {
     console.warn('Too less users to make the draw');
   } else {
