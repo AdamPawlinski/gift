@@ -1,14 +1,7 @@
-const clone = require('rfdc')();
+import * as clone from 'rfdc'
+// const clone = require('rfdc')();
 
-let userTabStart = [
-  "Adam",
-  "Krzysztof",
-  "Anna",
-  "Grzegorz",
-  "Karolina",
-];
-
-export default function draw() {  
+export default function draw(userTabStart) {  
   let drawResult;
   let drawResultArr = [];
   let drawResultsState = [];

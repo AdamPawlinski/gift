@@ -1,9 +1,14 @@
 <template>
-  <UContainer>
+  <UContainer class="flex items-center w-full h-full">
     <UCard>
       <template #header>
+        <div class="text-lg font-bold">
+          Christmas gifts lottery
+        </div>
       </template>
-      <Nuxt />
+      <div>
+        <Nuxt />        
+      </div>
       <template #footer>
       </template>
     </UCard>
