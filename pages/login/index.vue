@@ -1,36 +1,21 @@
 <template>
-  <div>
-    <div 
-      my="3"
-      d="flex"
-      justify-content="flex-end"
-    >
-      <UButton mr="3" @click="onClickStartLotteryHandler(false)">
+  <div class="flex flex-col items-center align-middle w-full h-full">
+    <div class="flex flex-end my-10">
+      <UButton @click="onClickStartLotteryHandler(false)">
         Start lottery
       </UButton>
     </div>
-    <div
-      d="flex"
-      w="100vw"
-      h="95vh"
-      flex-dir="column"
-      justify-content="center"
-    >      
-      <div text-align="center" mb="4">
-        Christmas gifts lottery
-      </div>
-      <div class="flex flex-col justify-center content-center">
+    <div>      
+      <div class="flex w-full h-full flex-col justify-center content-center">
         <UForm>
-          <UFormGroup label="Imię" name="name">
-            <UInput id="name" placeholder="First name" @change.prevent="setName"/>
+          <UFormGroup class="ml-2 text-bold" label="Imię" name="name">
+            <UInput class="mt-2" id="name" placeholder="First name" @change.prevent="setName"/>
           </UFormGroup>
           <!-- <CFormLabel for="sname">Nazwisko</CFormLabel>
           <CInput id="sname" placeholder="Last name" /> -->
-          <UButton
-            loading-text="Submitting"
-            variant-color="blue"
-            variant="outline"
-            my="4"
+          <UButton 
+            class="my-4 border-green-400"
+            :ui="{variant: 'outline'}"
             type="submit"
             @click="onClickSubmitHandler"  
           >
@@ -89,8 +74,8 @@
 </template>
 
 <script setup lang="ts">
-import draw from '../script/draw.js';
-import showResults from '../script/drawResults.js';
+import draw from '../../script/draw.js';
+import showResults from '../../script/drawResults.js';
   
   const showModalLottery = ref(false);
   const showModalResult = ref(false);
@@ -110,6 +95,11 @@ import showResults from '../script/drawResults.js';
     }
   })
 
+   const client = useSupabaseClient()
+
+  const { data: users } = await useAsyncData('users', async () => client.from('users').select('*').order('created_at'))
+  console.log(users.value)
+
   const onClickSubmitHandler = () => {
     drawPick.value = showResults(results, person);
     showModalResult.value = true;
@@ -121,11 +111,12 @@ import showResults from '../script/drawResults.js';
     } else {
       results.value = [];
       startLottery = true;
-      results.value = draw();        
+      results.value = draw(users);        
     }
   };
 
   const setName = (e) => {
     person.value = e.target.value;
   }
+
 </script>
