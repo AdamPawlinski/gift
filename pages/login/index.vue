@@ -1,13 +1,13 @@
 <template>
   <div class="flex flex-col items-center align-middle w-full h-full">
     <div class="flex flex-end my-10">
-      <UButton @click="onClickStartLotteryHandler(false)">
+      <UButton @click="onClickStartLotteryHandler(true)">
         Start lottery
       </UButton>
     </div>
     <div>      
       <div class="flex w-full h-full flex-col justify-center content-center">
-        <UForm>
+        <UForm :state="formState" @submit="onClickSubmitHandler">
           <UFormGroup class="ml-2 text-bold" label="Imię" name="name">
             <UInput class="mt-2" id="name" placeholder="First name" @change.prevent="setName"/>
           </UFormGroup>
@@ -76,8 +76,8 @@
 <script setup lang="ts">
 import draw from '../script/draw.js';
 import showResults from '../script/drawResults.js';
-import emailjs from '@emailjs/browser';
-import participantsList from "../assets/participatns.json";
+import emailjs from '@emailjs/browser';participantEmails
+import {participantsList, emailList, participantEmails} from "../assets/participants.json";
   
   
   const showModalLottery = ref(false);
@@ -87,6 +87,9 @@ import participantsList from "../assets/participatns.json";
   const results = ref([]);
   const person = ref('');
   const drawPick = ref('');
+  const formState = ref({
+    email: undefined,
+  })
   const mainStyles = ref({
     dark: {
       bg: 'gray.700',
@@ -118,6 +121,16 @@ import participantsList from "../assets/participatns.json";
       );
   };
 
+  const sendResults = (results) => {
+    console.log('results', results.value);
+    participantEmails.forEach(
+      data => {
+        data.chosen = results.value.find(item => item[data.name])[data.name];
+        console.log('data', data)
+        // sendEmail(data)
+      }
+    )
+  }
 
   const onClickSubmitHandler = () => {
     drawPick.value = showResults(results.value, person);
@@ -125,13 +138,16 @@ import participantsList from "../assets/participatns.json";
   };
 
   const onClickStartLotteryHandler = (startLottery: boolean = false) => {      
+    console.log(participantsList);
     if (!startLottery) {
       showModalLottery.value = true
     } else {
       results.value = [];
       startLottery = true;
       results.value = draw(participantsList);   
-      console.log(results.value);     
+      console.log(results.value); 
+      sendResults(results)
+      console.log('email', results.value);   
     }
   };
 

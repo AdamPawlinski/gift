@@ -1,0 +1,37 @@
+{
+  "participantsList": [
+    "Krzysztof", 
+    "Anna",
+    "Grzegorz",
+    "Karolina",
+    "Adam"
+  ],
+  "emailList": [
+    "adam.pawlinski@gmail.com",
+    "apawlinski1978@gmail.com",
+    "jkarola@op.pl",
+    "gpawlinski@wp.pl"
+  ],
+  "participantEmails": [
+    {
+      "name": "Grzegorz",
+      "email": "adam.pawlinski@gmail.com"
+    },
+    {
+      "name": "Karolina",
+      "email": "adam.pawlinski@gmail.com"
+    },
+    {
+      "name": "Adam",
+      "email": "adam.pawlinski@gmail.com"
+    },
+    {
+      "name": "Anna",
+      "email": "adam.pawlinski@gmail.com"
+    },
+    {
+      "name": "Krzysztof",
+      "email": "adam.pawlinski@gmail.com"
+    }
+  ]
+}

@@ -5,15 +5,15 @@ export default function draw(userTab) {
   let drawResult;
   let drawResultArr = [];
   let drawResultsState = [];
-  let userTabStart = userTab.map(user => user.users);
+  
+  let userTabStart = userTab.map(user => user);
   let drawUserTab = userTabStart.slice();
-  console.log(drawUserTab, userTabStart);
   if (userTabStart.length < 2) {
     console.warn('Too less users to make the draw');
   } else {
     for (let i of userTabStart) {
       if (drawUserTab.length === 1 && drawUserTab[0] === i) {
-        drawUserTab = userTabStart.map(user => user.users).slice();
+        drawUserTab = userTabStart.map(user => user).slice();
         draw();
         break;
       }
