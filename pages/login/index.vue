@@ -74,8 +74,11 @@
 </template>
 
 <script setup lang="ts">
-import draw from '../../script/draw.js';
-import showResults from '../../script/drawResults.js';
+import draw from '../script/draw.js';
+import showResults from '../script/drawResults.js';
+import emailjs from '@emailjs/browser';
+import participantsList from "../assets/participatns.json";
+  
   
   const showModalLottery = ref(false);
   const showModalResult = ref(false);
@@ -95,13 +98,29 @@ import showResults from '../../script/drawResults.js';
     }
   })
 
-   const client = useSupabaseClient()
+  //  const client = useSupabaseClient()
 
-  const { data: users } = await useAsyncData('users', async () => client.from('users').select('*').order('created_at'))
-  console.log(users.value)
+  // const { data: users } = await useAsyncData('users', async () => client.from('users').select('*').order('created_at'))
+  // console.log(users.value)
+
+  const sendEmail = (results) => {
+    emailjs
+      .send('service_2ncinoo', 'template_yifk46g', results, {
+        publicKey: 'user_IOvcrHPIPVyLJM1g8I3wJ',
+      })
+      .then(
+        () => {
+          console.log('SUCCESS!');
+        },
+        (error) => {
+          console.log('FAILED...', error.text);
+        },
+      );
+  };
+
 
   const onClickSubmitHandler = () => {
-    drawPick.value = showResults(results, person);
+    drawPick.value = showResults(results.value, person);
     showModalResult.value = true;
   };
 
@@ -111,7 +130,8 @@ import showResults from '../../script/drawResults.js';
     } else {
       results.value = [];
       startLottery = true;
-      results.value = draw(users);        
+      results.value = draw(participantsList);   
+      console.log(results.value);     
     }
   };
 
