@@ -77,7 +77,7 @@
 import draw from '../script/draw.js';
 import showResults from '../script/drawResults.js';
 import emailjs from '@emailjs/browser';participantEmails
-import {participantsList, emailList, participantEmails} from "../../assets/participants.json";
+import {participantsList, emailList, participantEmails} from "@/assets/participants.json";
   
   
   const showModalLottery = ref(false);
