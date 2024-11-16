@@ -127,7 +127,7 @@ import {participantsList, emailList, participantEmails} from "@/assets/participa
       data => {
         data.chosen = results.value.find(item => item[data.name])[data.name];
         console.log('data', data)
-        // sendEmail(data)
+        sendEmail(data)
       }
     )
   }
