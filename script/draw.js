@@ -19,7 +19,7 @@ export default function draw(userTab) {
       }
       do {
         drawResult = Math.floor(Math.random() * drawUserTab.length);
-      } while (drawUserTab[drawResult].users === i);
+      } while (drawUserTab[drawResult] === i);
       console.log('i', i)
       const drawUser = drawUserTab.splice(drawResult, 1).toString();
       drawResultArr.push({ [i]: drawUser });
