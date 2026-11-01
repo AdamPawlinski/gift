@@ -7,7 +7,7 @@
         </div>
       </template>
       <div>
-        <Nuxt />        
+        <slot />
       </div>
       <template #footer>
       </template>

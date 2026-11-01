@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col items-center align-middle w-full h-full">
     <div class="flex flex-end my-10">
-      <UButton @click="onClickStartLotteryHandler(true)">
+      <UButton @click="onClickStartLotteryHandler()">
         Start lottery
       </UButton>
     </div>
@@ -23,7 +23,7 @@
           </UButton>
         </UForm>
         
-        <UModal :is-open="showModalLottery">
+        <UModal v-model="showModalLottery">
           <UCard v-if="!startLottery">
             <template #header>
               Czy chcesz rozpocząć nowe losowanie?
@@ -54,7 +54,7 @@
             <UButton @click="showModalLottery = false; startLottery = false" />
           </UCard>
         </UModal>
-        <UModal :is-open="showModalResult">
+        <UModal v-model="showModalResult">
           <UCard>
             <template #header>
               Wylosowałaś/eś
@@ -74,9 +74,9 @@
 </template>
 
 <script setup lang="ts">
-import draw from '../script/draw.js';
-import showResults from '../script/drawResults.js';
-import emailjs from '@emailjs/browser';participantEmails
+import draw from '~/script/draw.js';
+import showResults from '~/script/drawResults.js';
+import emailjs from '@emailjs/browser';
 import {participantsList, emailList, participantEmails} from "@/assets/participants.json";
   
   
@@ -125,30 +125,32 @@ import {participantsList, emailList, participantEmails} from "@/assets/participa
     console.log('results', results.value);
     participantEmails.forEach(
       data => {
-        data.chosen = results.value.find(item => item[data.name])[data.name];
-        console.log('data', data)
-        sendEmail(data)
+        const match = results.value.find(item => item[data.name]);
+        if (!match) {
+          console.warn(`No draw result for ${data.name}, email not sent`);
+          return;
+        }
+        sendEmail({ ...data, chosen: match[data.name] })
       }
     )
   }
 
   const onClickSubmitHandler = () => {
-    drawPick.value = showResults(results.value, person);
+    drawPick.value = showResults(results.value, person.value.trim());
     showModalResult.value = true;
   };
 
-  const onClickStartLotteryHandler = (startLottery: boolean = false) => {      
-    console.log(participantsList);
-    if (!startLottery) {
-      showModalLottery.value = true
-    } else {
-      results.value = [];
-      startLottery = true;
-      results.value = draw(participantsList);   
-      console.log(results.value); 
-      sendResults(results)
-      console.log('email', results.value);   
+  // Without confirmation only opens the confirm modal; the draw (and the emails) run once confirmed.
+  const onClickStartLotteryHandler = (confirmed: boolean = false) => {
+    if (!confirmed) {
+      startLottery.value = false;
+      showModalLottery.value = true;
+      return;
     }
+    results.value = draw(participantsList);
+    if (!results.value.length) return;
+    sendResults(results);
+    startLottery.value = true;
   };
 
   const setName = (e) => {
