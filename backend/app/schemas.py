@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, StringConstraints
@@ -26,3 +26,18 @@ class Me(BaseModel):
     username: str
     email: str
     is_master: bool
+
+
+class LotteryCurrent(BaseModel):
+    status: Literal["not_started", "finished"]
+    lottery_id: UUID | None = None
+    participated: bool = False
+    receiver_username: str | None = None
+
+
+class LotteryCreated(BaseModel):
+    lottery_id: UUID
+
+
+class Participant(BaseModel):
+    username: str

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.db import create_pool
-from app.routers import auth, me
+from app.routers import auth, lottery, me
 
 
 @asynccontextmanager
@@ -36,4 +36,5 @@ async def health() -> dict[str, str]:
 
 api.include_router(auth.router)
 api.include_router(me.router)
+api.include_router(lottery.router)
 app.include_router(api)
