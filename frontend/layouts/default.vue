@@ -1,21 +1,12 @@
 <template>
-  <UContainer class="flex items-center w-full h-full">
-    <UCard>
+  <UContainer class="flex items-center justify-center min-h-screen">
+    <UCard class="w-full max-w-md">
       <template #header>
         <div class="text-lg font-bold">
-          Christmas gifts lottery
+          Losowanie prezentów
         </div>
       </template>
-      <div>
-        <slot />
-      </div>
-      <template #footer>
-      </template>
+      <slot />
     </UCard>
   </UContainer>
 </template>
-<script setup lang="ts">
-
-
-
-</script>

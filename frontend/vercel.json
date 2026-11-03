@@ -1,0 +1,6 @@
+{
+  "framework": "nuxtjs",
+  "buildCommand": "yarn generate",
+  "outputDirectory": ".output/public",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
