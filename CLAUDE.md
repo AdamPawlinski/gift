@@ -15,7 +15,7 @@ Christmas gift lottery (Secret Santa). Users sign up and log in, one "lottery ma
   - `draw.py` is the pairing algorithm. `email.py` sends mail through the Brevo HTTP API.
   - `routers/auth.py`, `me.py`, `lottery.py`.
 - `supabase/migrations/0001_init.sql`: schema.
-- `render.yaml` (backend on Render), `frontend/vercel.json` (frontend on Vercel).
+- `vercel.json`: one Vercel project with two Services, `frontend` (static SPA) and `backend` (FastAPI). `/api/*` goes to the backend, everything else to the frontend.
 
 ## Commands
 
@@ -35,7 +35,7 @@ npx nuxi typecheck
 
 ## Environment
 
-- `backend/.env` (see `.env.example`): `SUPABASE_URL` (project URL only, no path), `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (Session pooler string), `BREVO_API_KEY`, `EMAIL_SENDER_ADDRESS` (verified in Brevo), `EMAIL_SENDER_NAME`, `CORS_ORIGINS` (comma-separated, no trailing slash), `MIN_PARTICIPANTS` (default 3), `EMAIL_COOLDOWN_MINUTES` (default 10).
+- `backend/.env` (see `.env.example`): `SUPABASE_URL` (project URL only, no path), `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (Session pooler locally, Transaction pooler on Vercel), `BREVO_API_KEY`, `EMAIL_SENDER_ADDRESS` (verified in Brevo), `EMAIL_SENDER_NAME`, `CORS_ORIGINS` (comma-separated, no trailing slash), `MIN_PARTICIPANTS` (default 3), `EMAIL_COOLDOWN_MINUTES` (default 10).
 - `frontend/.env` (see `.env.example`): `NUXT_PUBLIC_SUPABASE_URL`, `NUXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key), `NUXT_PUBLIC_API_BASE` (for example `http://localhost:8000/api`).
 - Never commit `.env` files or the service role key.
 
@@ -56,11 +56,13 @@ npx nuxi typecheck
 - Test emails must use a real-looking domain such as `example.com`; `.test` is rejected by validation.
 - Emails need Brevo configured, otherwise the email endpoint returns 502.
 - Backend tests use a scripted fake DB connection and dummy env vars (`tests/conftest.py`); they don't touch Supabase.
-- Free tiers: Render sleeps after 15 minutes idle (first request is slow), and a Supabase project pauses after 7 days without activity.
+- The backend runs on Vercel Fluid compute: each instance has its own small pool (`min_size=0`, `max_size=3`, `prepare_threshold=None` for the Transaction pooler), and shutdown cleanup must finish within 500 ms (`pool.close(timeout=0.3)`).
+- Free tiers: Vercel Hobby is non-commercial and functions have cold starts; a Supabase project pauses after 7 days without activity.
+- Vercel Services is in beta.
 - Multiple groups are not supported yet (planned as a later stage).
 
 ## Deployment
 
-1. Render: New → Blueprint from this repo (`render.yaml`), fill in the secret env vars.
-2. Vercel: root directory `frontend`, set the `NUXT_PUBLIC_*` vars with `NUXT_PUBLIC_API_BASE=https://<service>.onrender.com/api`.
-3. Set `CORS_ORIGINS` on Render to the Vercel URL and redeploy.
+1. Vercel: import the repo with root directory = repository root (`vercel.json` defines the services).
+2. Env vars (shared by both services): `NUXT_PUBLIC_SUPABASE_URL`, `NUXT_PUBLIC_SUPABASE_ANON_KEY`, `NUXT_PUBLIC_API_BASE=/api`, and the backend vars with `DATABASE_URL` set to the Transaction pooler (port 6543).
+3. Frontend and API share one origin, so `CORS_ORIGINS` only matters locally.

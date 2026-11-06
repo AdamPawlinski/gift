@@ -14,13 +14,13 @@ Today the app is a single Nuxt page. The participants are hardcoded in `assets/p
 | Topic | Decision |
 |---|---|
 | Frontend | Nuxt 3 + `@nuxt/ui`, SPA mode (`ssr: false`), deployed as a static site on Vercel |
-| Backend | Python 3.12, FastAPI, managed with `uv`, deployed on Render (free tier) |
+| Backend | Python 3.12, FastAPI, managed with `uv`, deployed on Vercel as a FastAPI service (Vercel Services, same project as the frontend) |
 | Database | Supabase Postgres (free tier) |
 | Auth | Supabase Auth with email + password. Sign-up goes only through the backend. The frontend uses `supabase-js` only for `signInWithPassword` and `signOut`, and for refreshing the session. The backend verifies the Supabase JWT. |
 | DB access from backend | `psycopg` 3 (async) through the Supabase **Session pooler** URL (IPv4). Transactions are explicit. |
 | Auth admin from backend | `supabase` Python client with the service-role key, used for creating and deleting users |
 | Lottery master | First come, first served. At most one master, enforced by a partial unique index. |
-| Email | Sent by the backend through the Brevo transactional HTTP API. It's free (300 emails/day) and needs only a verified sender address. Render's free tier blocks SMTP ports, so SMTP is not an option there. |
+| Email | Sent by the backend through the Brevo transactional HTTP API. It's free (300 emails/day) and needs only a verified sender address. An HTTP API avoids SMTP from serverless functions. |
 | Table access | RLS is enabled on every public table with no policies, so only the backend (service role) reads and writes data |
 
 ## Scope
@@ -80,7 +80,7 @@ gift/
     migrations/0001_init.sql
   docs/refactor-plan.md
   CLAUDE.md
-  render.yaml
+  vercel.json
 ```
 
 ## Database schema (`supabase/migrations/0001_init.sql`)
@@ -336,11 +336,12 @@ Validation rules:
 
 ### 12. Deployment
 
-1. `render.yaml`: a web service with `rootDir: backend`, `buildCommand: pip install uv && uv sync --frozen`, and `startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Set the env vars from `.env.example` and the health check path `/api/health`.
-2. Vercel: root directory `frontend`, framework preset Nuxt, build command `yarn generate`, output directory `.output/public`, with the `NUXT_PUBLIC_*` env vars. Add `frontend/vercel.json` with the SPA rewrite `{"rewrites":[{"source":"/(.*)","destination":"/index.html"}]}`.
-3. Set `CORS_ORIGINS` on the backend to the frontend URL.
-4. Known limits of the free tiers:
-   - Render free sleeps after 15 minutes idle, so the first request takes about a minute.
+1. Root `vercel.json` defines two Vercel Services (beta, all plans) in one project: `frontend` (root `frontend/`, Nuxt, `yarn generate`, output `.output/public`, SPA rewrite to `/index.html`) and `backend` (root `backend/`, FastAPI, entrypoint `app.main:app`). Top-level rewrites send `/api/(.*)` to `backend` and everything else to `frontend`. The backend receives the original path, so the `/api` prefix stays.
+2. Vercel project: root directory = repository root. Env vars (shared): the `NUXT_PUBLIC_*` vars with `NUXT_PUBLIC_API_BASE=/api`, and the backend vars from `backend/.env.example` with `DATABASE_URL` set to the Supabase Transaction pooler (port 6543).
+3. Same origin in production, so CORS only matters locally.
+4. The backend runs on Fluid compute: the pool is small (`min_size=0`, `max_size=3`) and closes within the 500 ms shutdown window.
+5. Known limits of the free tiers:
+   - Vercel Hobby is for non-commercial use; functions have cold starts but don't sleep for a minute like Render free.
    - A Supabase free project pauses after 7 days without activity.
 
 ### 13. Documentation

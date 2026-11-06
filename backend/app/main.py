@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
     await pool.open()
     app.state.pool = pool
     yield
-    await pool.close()
+    await pool.close(timeout=0.3)
 
 
 app = FastAPI(title="Gift lottery API", lifespan=lifespan)

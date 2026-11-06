@@ -9,8 +9,8 @@ from psycopg_pool import AsyncConnectionPool
 def create_pool(database_url: str) -> AsyncConnectionPool:
     return AsyncConnectionPool(
         database_url,
-        min_size=1,
-        max_size=5,
+        min_size=0,
+        max_size=3,
         open=False,
         kwargs={"row_factory": dict_row, "prepare_threshold": None},
     )

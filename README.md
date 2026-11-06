@@ -2,14 +2,14 @@
 
 Christmas gift lottery (Secret Santa). Users register, one lottery master starts the draw, and everyone sees who they should buy a gift for. The result can be emailed to the user.
 
-Stack: Nuxt 3 (Vercel), FastAPI (Render), Supabase (Auth and Postgres), Brevo (email).
+Stack: Nuxt 3 and FastAPI in one Vercel project (Vercel Services), Supabase (Auth and Postgres), Brevo (email).
 
 ## 1. Supabase
 
 1. Create a project.
 2. Authentication → Sign In / Providers → Email: turn off "Enable email provider" sign-ups and "Secure email change" (users are created by the backend).
 3. Run `supabase/migrations/0001_init.sql` in the SQL editor.
-4. Collect: project URL, publishable (anon) key, service role key, and the Session pooler connection string (Connect → Session pooler).
+4. Collect: project URL, publishable (anon) key, service role key, and the connection strings (Connect → Session pooler for local use, Transaction pooler for Vercel).
 
 ## 2. Brevo
 
@@ -38,11 +38,13 @@ yarn dev                # http://localhost:3000
 
 ## 4. Deploy
 
-1. Render: New → Blueprint, select this repo. Fill in the secret env vars from `backend/.env.example`. Leave `CORS_ORIGINS` empty for now.
-2. Vercel: import the repo with root directory `frontend`. Set `NUXT_PUBLIC_SUPABASE_URL`, `NUXT_PUBLIC_SUPABASE_ANON_KEY` and `NUXT_PUBLIC_API_BASE=https://<service>.onrender.com/api`.
-3. Set `CORS_ORIGINS` on Render to the Vercel URL (no trailing slash) and redeploy.
+1. Vercel: import the repo with root directory = repository root. `vercel.json` defines two services: `/api/*` goes to the FastAPI backend, everything else to the static Nuxt frontend.
+2. Set env vars in the project:
+   - `NUXT_PUBLIC_SUPABASE_URL`, `NUXT_PUBLIC_SUPABASE_ANON_KEY`, `NUXT_PUBLIC_API_BASE=/api`
+   - the backend vars from `backend/.env.example`, with `DATABASE_URL` set to the Transaction pooler string (port 6543)
+3. Deploy, then check `https://<your-domain>/api/health`.
 
-Free-tier limits: Render sleeps after 15 minutes idle (the first request takes about a minute), and a Supabase project pauses after 7 days without activity.
+Free-tier limits: Vercel Hobby is for non-commercial use and functions have cold starts; a Supabase project pauses after 7 days without activity.
 
 ## Checking a lottery
 
