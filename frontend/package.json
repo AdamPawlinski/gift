@@ -9,6 +9,9 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare"
   },
+  "engines": {
+    "node": "24.x"
+  },
   "devDependencies": {
     "@nuxt/devtools": "latest",
     "nuxt": "^3.14.159",
