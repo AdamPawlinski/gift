@@ -1,69 +1,51 @@
-# gift
+# Losowanie prezentów
 
-## Build Setup
+Christmas gift lottery (Secret Santa). Users register, one lottery master starts the draw, and everyone sees who they should buy a gift for. The result can be emailed to the user.
+
+Stack: Nuxt 3 and FastAPI in one Vercel project (Vercel Services), Supabase (Auth and Postgres), Brevo (email).
+
+## 1. Supabase
+
+1. Create a project.
+2. Authentication → Sign In / Providers → Email: turn off "Enable email provider" sign-ups and "Secure email change" (users are created by the backend).
+3. Run `supabase/migrations/0001_init.sql` in the SQL editor.
+4. Collect: project URL, publishable (anon) key, service role key, and the connection strings (Connect → Session pooler for local use, Transaction pooler for Vercel).
+
+## 2. Brevo
+
+Create an account, verify a sender address, and create an API key.
+
+## 3. Run locally
+
+Backend:
 
 ```bash
-# install dependencies
-$ yarn install
-
-# serve with hot reload at localhost:3000
-$ yarn dev
-
-# build for production and launch server
-$ yarn build
-$ yarn start
-
-# generate static project
-$ yarn generate
+cd backend
+cp .env.example .env    # fill it in
+uv sync
+uv run uvicorn app.main:app --reload --port 8000
+uv run pytest
 ```
 
-For detailed explanation on how things work, check out the [documentation](https://nuxtjs.org).
+Frontend:
 
-## Special Directories
+```bash
+cd frontend
+cp .env.example .env    # fill it in
+yarn install
+yarn dev                # http://localhost:3000
+```
 
-You can create the following extra directories, some of which have special behaviors. Only `pages` is required; you can delete them if you don't want to use their functionality.
+## 4. Deploy
 
-### `assets`
+1. Vercel: import the repo with root directory = repository root. `vercel.json` defines two services: `/api/*` goes to the FastAPI backend, everything else to the static Nuxt frontend.
+2. Set env vars in the project:
+   - `NUXT_PUBLIC_SUPABASE_URL`, `NUXT_PUBLIC_SUPABASE_ANON_KEY`, `NUXT_PUBLIC_API_BASE=/api`
+   - the backend vars from `backend/.env.example`, with `DATABASE_URL` set to the Transaction pooler string (port 6543)
+3. Deploy, then check `https://<your-domain>/api/health`.
 
-The assets directory contains your uncompiled assets such as Stylus or Sass files, images, or fonts.
+Free-tier limits: Vercel Hobby is for non-commercial use and functions have cold starts; a Supabase project pauses after 7 days without activity.
 
-More information about the usage of this directory in [the documentation](https://nuxtjs.org/docs/2.x/directory-structure/assets).
+## Checking a lottery
 
-### `components`
-
-The components directory contains your Vue.js components. Components make up the different parts of your page and can be reused and imported into your pages, layouts and even other components.
-
-More information about the usage of this directory in [the documentation](https://nuxtjs.org/docs/2.x/directory-structure/components).
-
-### `layouts`
-
-Layouts are a great help when you want to change the look and feel of your Nuxt app, whether you want to include a sidebar or have distinct layouts for mobile and desktop.
-
-More information about the usage of this directory in [the documentation](https://nuxtjs.org/docs/2.x/directory-structure/layouts).
-
-
-### `pages`
-
-This directory contains your application views and routes. Nuxt will read all the `*.vue` files inside this directory and setup Vue Router automatically.
-
-More information about the usage of this directory in [the documentation](https://nuxtjs.org/docs/2.x/get-started/routing).
-
-### `plugins`
-
-The plugins directory contains JavaScript plugins that you want to run before instantiating the root Vue.js Application. This is the place to add Vue plugins and to inject functions or constants. Every time you need to use `Vue.use()`, you should create a file in `plugins/` and add its path to plugins in `nuxt.config.js`.
-
-More information about the usage of this directory in [the documentation](https://nuxtjs.org/docs/2.x/directory-structure/plugins).
-
-### `static`
-
-This directory contains your static files. Each file inside this directory is mapped to `/`.
-
-Example: `/static/robots.txt` is mapped as `/robots.txt`.
-
-More information about the usage of this directory in [the documentation](https://nuxtjs.org/docs/2.x/directory-structure/static).
-
-### `store`
-
-This directory contains your Vuex store files. Creating a file in this directory automatically activates Vuex.
-
-More information about the usage of this directory in [the documentation](https://nuxtjs.org/docs/2.x/directory-structure/store).
+Every lottery has an id. In Supabase, `lotteries` holds the status (`finished` or `cancelled`) and `lottery_logs` records each action with its `lottery_id`.
