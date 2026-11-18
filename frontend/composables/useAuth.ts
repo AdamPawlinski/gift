@@ -6,8 +6,8 @@ export function useAuth() {
     return !error
   }
 
-  async function signOut() {
-    await $supabase.auth.signOut()
+  async function signOut(scope: 'global' | 'local' = 'global') {
+    await $supabase.auth.signOut({ scope })
   }
 
   async function isLoggedIn(): Promise<boolean> {

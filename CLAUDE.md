@@ -14,7 +14,7 @@ Christmas gift lottery (Secret Santa). Users sign up and log in, one "lottery ma
   - `supabase_admin.py` creates users through the admin API.
   - `draw.py` is the pairing algorithm. `email.py` sends mail through the Brevo HTTP API.
   - `routers/auth.py`, `me.py`, `lottery.py`.
-- `supabase/migrations/0001_init.sql`: schema.
+- `supabase/migrations/`: schema (`0001_init.sql`, `0002_account_deletion.sql`); run them in order in the Supabase SQL editor.
 - `vercel.json`: one Vercel project with two Services, `frontend` (static SPA) and `backend` (FastAPI). `/api/*` goes to the backend, everything else to the frontend.
 
 ## Commands
@@ -44,11 +44,12 @@ npx nuxi typecheck
 - `profiles` (one per auth user: `username`, `is_master`), `lotteries` (`status`: `finished` or `cancelled`), `lottery_results` (giver, receiver), `lottery_logs` (every action with `lottery_id`).
 - Partial unique indexes enforce one master (`profiles_single_master`), one active lottery (`lotteries_single_active`) and unique usernames ignoring case (`profiles_username_ci`).
 - RLS is on with no policies, so only the backend (service role) reads and writes the tables. Public sign-up is disabled in Supabase; users are created through `POST /api/auth/register`.
+- Account deletion (`POST /me/delete`) is a tombstone: `profiles` keeps the id, but `username`/`email` become null, `is_master` false and `deleted_at` is set, and the auth user is deleted (the `profiles.id` foreign key to `auth.users` is dropped in `0002`). If the user was in the active lottery, it is cancelled for everyone. Deleted profiles are excluded from login (`get_current_profile`), the participant list and the draw.
 - Cancelling a lottery is a soft cancel (status `cancelled`), so old ids and logs stay queryable.
 
 ## API (prefix `/api`)
 
-`GET /health`, `GET /auth/master-available`, `POST /auth/register` (409: `email_taken`, `username_taken`, `master_taken`), `GET /me`, `GET /lottery/current`, `GET /participants` (master), `POST /lottery` (master; 400 `not_enough_participants`, 409 `lottery_active`), `DELETE /lottery/current` (master), `POST /lottery/current/email` (404 `no_result`, 429 `rate_limited`, 502 `email_failed`).
+`GET /health`, `GET /auth/master-available`, `POST /auth/register` (409: `email_taken`, `username_taken`, `master_taken`), `GET /me`, `POST /me/delete` (body `password`; 403 `wrong_password`, 502 `delete_failed`/`auth_failed`), `GET /lottery/current`, `GET /participants` (master), `POST /lottery` (master; 400 `not_enough_participants`, 409 `lottery_active`), `DELETE /lottery/current` (master), `POST /lottery/current/email` (404 `no_result`, 429 `rate_limited`, 502 `email_failed`).
 
 ## Gotchas
 
