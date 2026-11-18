@@ -47,7 +47,8 @@ async def get_current_profile(
     conn: AsyncConnection = Depends(get_conn),
 ) -> Me:
     cur = await conn.execute(
-        "select id, username, email, is_master from profiles where id = %s", (user_id,)
+        "select id, username, email, is_master from profiles"
+        " where id = %s and deleted_at is null", (user_id,)
     )
     row = await cur.fetchone()
     if row is None:

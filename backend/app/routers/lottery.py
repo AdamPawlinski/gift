@@ -49,7 +49,7 @@ async def current_lottery(
 
 @router.get("/participants", response_model=list[Participant])
 async def participants(_: Me = Depends(require_master), conn: AsyncConnection = Depends(get_conn)):
-    cur = await conn.execute("select username from profiles order by created_at")
+    cur = await conn.execute("select username from profiles where deleted_at is null order by created_at")
     return await cur.fetchall()
 
 
@@ -60,7 +60,7 @@ async def start_lottery(
     settings: Settings = Depends(get_settings),
 ):
     # Lock the profiles so nobody registers between reading the list and drawing.
-    cur = await conn.execute("select id from profiles order by created_at for update")
+    cur = await conn.execute("select id from profiles where deleted_at is null order by created_at for update")
     ids = [row["id"] for row in await cur.fetchall()]
     if len(ids) < max(settings.min_participants, 2):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "not_enough_participants")
@@ -89,22 +89,31 @@ async def start_lottery(
     return LotteryCreated(lottery_id=lottery_id)
 
 
+async def cancel_active_lottery(
+    conn: AsyncConnection, actor_id: UUID, details: dict | None = None
+) -> UUID | None:
+    cur = await conn.execute(
+        "update lotteries set status = 'cancelled', cancelled_by = %s, cancelled_at = now()"
+        " where status = 'finished' returning id",
+        (actor_id,),
+    )
+    row = await cur.fetchone()
+    if row is None:
+        return None
+    await conn.execute(
+        "insert into lottery_logs (lottery_id, actor_id, action, details)"
+        " values (%s, %s, 'lottery_cancelled', %s)",
+        (row["id"], actor_id, Jsonb(details or {})),
+    )
+    return row["id"]
+
+
 @router.delete("/lottery/current", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_lottery(
     master: Me = Depends(require_master), conn: AsyncConnection = Depends(get_conn)
 ):
-    cur = await conn.execute(
-        "update lotteries set status = 'cancelled', cancelled_by = %s, cancelled_at = now()"
-        " where status = 'finished' returning id",
-        (master.id,),
-    )
-    row = await cur.fetchone()
-    if row is None:
+    if await cancel_active_lottery(conn, master.id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no_active_lottery")
-    await conn.execute(
-        "insert into lottery_logs (lottery_id, actor_id, action) values (%s, %s, 'lottery_cancelled')",
-        (row["id"], master.id),
-    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

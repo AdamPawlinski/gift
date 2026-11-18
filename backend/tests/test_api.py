@@ -169,3 +169,102 @@ def test_email_sent(client, monkeypatch):
     as_user(make_me(), [[{"id": uuid4()}], [{"username": "Bartek"}], [{"e": False}], []])
     assert client.post("/api/lottery/current/email").status_code == 202
     assert sent == [("ala@example.com", "Ala", "Bartek")]
+
+
+class FakeAdmin:
+    def __init__(self, error=None):
+        self.deleted = []
+        self.error = error
+        self.auth = type("A", (), {"admin": self})()
+
+    def delete_user(self, user_id):
+        if self.error:
+            raise self.error
+        self.deleted.append(user_id)
+
+
+def delete_setup(monkeypatch, valid=True, admin=None):
+    from app.routers import me as me_router
+
+    async def fake_verify(email, password):
+        return valid
+
+    admin = admin or FakeAdmin()
+    monkeypatch.setattr(me_router, "verify_password", fake_verify)
+    monkeypatch.setattr(me_router, "get_admin_client", lambda: admin)
+    return admin
+
+
+def test_delete_account_wrong_password(client, monkeypatch):
+    admin = delete_setup(monkeypatch, valid=False)
+    conn = as_user(make_me(), [])
+    response = client.post("/api/me/delete", json={"password": "bad"})
+    assert response.status_code == 403
+    assert response.json()["detail"] == "wrong_password"
+    assert admin.deleted == [] and conn.script == []
+
+
+def test_delete_account_without_active_lottery(client, monkeypatch):
+    admin = delete_setup(monkeypatch)
+    me = make_me()
+    as_user(me, [[{"e": False}], [], []])
+    response = client.post("/api/me/delete", json={"password": "pw"})
+    assert response.status_code == 204
+    assert admin.deleted == [str(me.id)]
+
+
+def test_delete_account_cancels_active_lottery(client, monkeypatch):
+    admin = delete_setup(monkeypatch)
+    me = make_me(is_master=True)
+    conn = as_user(me, [[{"e": True}], [{"id": uuid4()}], [], [], []])
+    response = client.post("/api/me/delete", json={"password": "pw"})
+    assert response.status_code == 204
+    assert admin.deleted == [str(me.id)]
+    assert conn.script == []
+
+
+def test_delete_account_auth_failure(client, monkeypatch):
+    from supabase_auth.errors import AuthApiError
+
+    delete_setup(monkeypatch, admin=FakeAdmin(AuthApiError("boom", 500, "unexpected_failure")))
+    as_user(make_me(), [[{"e": False}], [], []])
+    response = client.post("/api/me/delete", json={"password": "pw"})
+    assert response.status_code == 502
+    assert response.json()["detail"] == "delete_failed"
+
+
+def test_delete_account_requires_password(client):
+    as_user(make_me(), [])
+    assert client.post("/api/me/delete", json={}).status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("status_code", "expected"), [(200, True), (400, False)]
+)
+async def test_verify_password(monkeypatch, status_code, expected):
+    import httpx
+
+    from app import supabase_admin
+
+    transport = httpx.MockTransport(lambda request: httpx.Response(status_code))
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        supabase_admin.httpx, "AsyncClient", lambda **kw: real(transport=transport, **kw)
+    )
+    assert await supabase_admin.verify_password("a@example.com", "pw") is expected
+
+
+async def test_verify_password_upstream_error(monkeypatch):
+    import httpx
+    from fastapi import HTTPException
+
+    from app import supabase_admin
+
+    transport = httpx.MockTransport(lambda request: httpx.Response(500))
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        supabase_admin.httpx, "AsyncClient", lambda **kw: real(transport=transport, **kw)
+    )
+    with pytest.raises(HTTPException) as exc:
+        await supabase_admin.verify_password("a@example.com", "pw")
+    assert exc.value.status_code == 502

@@ -17,6 +17,10 @@ class RegisterResponse(BaseModel):
     id: UUID
 
 
+class DeleteAccountRequest(BaseModel):
+    password: Annotated[str, StringConstraints(min_length=1, max_length=72)]
+
+
 class MasterAvailability(BaseModel):
     available: bool
 

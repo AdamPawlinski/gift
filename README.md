@@ -8,7 +8,7 @@ Stack: Nuxt 3 and FastAPI in one Vercel project (Vercel Services), Supabase (Aut
 
 1. Create a project.
 2. Authentication → Sign In / Providers → Email: turn off "Enable email provider" sign-ups and "Secure email change" (users are created by the backend).
-3. Run `supabase/migrations/0001_init.sql` in the SQL editor.
+3. Run `supabase/migrations/0001_init.sql`, then `0002_account_deletion.sql`, in the SQL editor.
 4. Collect: project URL, publishable (anon) key, service role key, and the connection strings (Connect → Session pooler for local use, Transaction pooler for Vercel).
 
 ## 2. Brevo

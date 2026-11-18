@@ -43,9 +43,14 @@
       </p>
     </div>
 
-    <UButton variant="outline" @click="logout">
-      Wyloguj się
-    </UButton>
+    <div class="flex flex-wrap gap-2">
+      <UButton variant="outline" @click="logout">
+        Wyloguj się
+      </UButton>
+      <UButton color="red" variant="ghost" @click="deleteOpen = true">
+        Usuń konto
+      </UButton>
+    </div>
 
     <UModal :model-value="confirm !== null" @update:model-value="confirm = null">
       <UCard>
@@ -60,6 +65,31 @@
             Nie
           </UButton>
         </div>
+      </UCard>
+    </UModal>
+
+    <UModal :model-value="deleteOpen" @update:model-value="closeDelete">
+      <UCard>
+        <template #header>
+          Czy na pewno usunąć konto?
+        </template>
+        <UForm :state="{}" class="space-y-4" @submit="deleteAccount">
+          <p>Twoje dane zostaną usunięte, a tej operacji nie można cofnąć.</p>
+          <p v-if="lottery?.status === 'finished' && lottery.participated">
+            Losowanie zostanie anulowane dla wszystkich uczestników.
+          </p>
+          <UFormGroup label="hasło:" :error="deleteError">
+            <UInput v-model="deletePassword" type="password" autocomplete="current-password" />
+          </UFormGroup>
+          <div class="flex gap-2">
+            <UButton type="submit" color="red" :loading="deleting" :disabled="!deletePassword">
+              Usuń konto
+            </UButton>
+            <UButton variant="outline" @click="closeDelete">
+              Anuluj
+            </UButton>
+          </div>
+        </UForm>
       </UCard>
     </UModal>
   </div>
@@ -84,13 +114,19 @@ const participants = ref<{ username: string }[]>([])
 const confirm = ref<'start' | 'cancel' | null>(null)
 const busy = ref(false)
 const sending = ref(false)
+const deleteOpen = ref(false)
+const deletePassword = ref('')
+const deleteError = ref('')
+const deleting = ref(false)
 
 const ERRORS: Record<string, string> = {
   not_enough_participants: 'Za mało uczestników (min. 3)',
   lottery_active: 'Losowanie już się odbyło',
   no_active_lottery: 'Brak aktywnego losowania',
   rate_limited: 'Spróbuj ponownie za kilka minut',
-  email_failed: 'Nie udało się wysłać wiadomości'
+  email_failed: 'Nie udało się wysłać wiadomości',
+  delete_failed: 'Nie udało się usunąć konta, spróbuj ponownie',
+  auth_failed: 'Nie udało się zweryfikować hasła, spróbuj ponownie'
 }
 
 function showError(e: unknown) {
@@ -139,6 +175,29 @@ async function sendEmail() {
   } finally {
     sending.value = false
   }
+}
+
+function closeDelete() {
+  deleteOpen.value = false
+  deletePassword.value = ''
+  deleteError.value = ''
+}
+
+async function deleteAccount() {
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await api('/me/delete', { method: 'POST', body: { password: deletePassword.value } })
+  } catch (e) {
+    if (apiErrorDetail(e) === 'wrong_password') deleteError.value = 'Nieprawidłowe hasło'
+    else showError(e)
+    deleting.value = false
+    return
+  }
+  deleting.value = false
+  await signOut('local')
+  toast.add({ title: 'Konto zostało usunięte' })
+  await navigateTo('/')
 }
 
 async function logout() {
