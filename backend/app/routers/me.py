@@ -6,7 +6,7 @@ from supabase_auth.errors import AuthApiError
 
 from app.auth import get_current_profile
 from app.db import get_conn
-from app.routers.lottery import cancel_active_lottery
+from app.routers.draws import leave_draw
 from app.schemas import DeleteAccountRequest, Me
 from app.supabase_admin import get_admin_client, verify_password
 
@@ -29,15 +29,10 @@ async def delete_account(
 
     admin = get_admin_client()
     async with conn.transaction():
-        cur = await conn.execute(
-            "select exists(select 1 from lottery_results r join lotteries l on l.id = r.lottery_id"
-            " where l.status = 'finished' and r.giver_id = %s) as e",
-            (profile.id,),
-        )
-        if (await cur.fetchone())["e"]:
-            await cancel_active_lottery(conn, profile.id, {"reason": "account_deleted"})
+        if profile.draw_id is not None:
+            await leave_draw(conn, profile, "account_deleted")
         await conn.execute(
-            "update profiles set username = null, email = null, is_master = false,"
+            "update profiles set username = null, email = null, draw_id = null, joined_at = null,"
             " deleted_at = now() where id = %s",
             (profile.id,),
         )

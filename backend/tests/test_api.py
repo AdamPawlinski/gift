@@ -61,8 +61,15 @@ class FakeSettings:
     email_cooldown_minutes = 10
 
 
-def make_me(is_master=False):
-    return Me(id=uuid4(), username="Ala", email="ala@example.com", is_master=is_master)
+def make_me(is_master=False, in_draw=True):
+    return Me(
+        id=uuid4(),
+        username="Ala",
+        email="ala@example.com",
+        draw_id=uuid4() if in_draw else None,
+        draw_name="Rodzina" if in_draw else None,
+        is_master=is_master,
+    )
 
 
 @pytest.fixture
@@ -87,7 +94,7 @@ def test_master_endpoints_forbidden_for_regular_user(client):
 
 
 def test_start_needs_enough_participants(client):
-    as_user(make_me(True), [[{"id": uuid4()}, {"id": uuid4()}]])
+    as_user(make_me(True), [[], [{"id": uuid4()}, {"id": uuid4()}]])
     response = client.post("/api/lottery")
     assert response.status_code == 400
     assert response.json()["detail"] == "not_enough_participants"
@@ -95,7 +102,7 @@ def test_start_needs_enough_participants(client):
 
 def test_start_conflicts_when_lottery_active(client):
     ids = [{"id": uuid4()} for _ in range(3)]
-    as_user(make_me(True), [ids, errors.UniqueViolation()])
+    as_user(make_me(True), [[], ids, errors.UniqueViolation()])
     response = client.post("/api/lottery")
     assert response.status_code == 409
     assert response.json()["detail"] == "lottery_active"
@@ -104,7 +111,7 @@ def test_start_conflicts_when_lottery_active(client):
 def test_start_creates_lottery(client):
     lottery_id = uuid4()
     ids = [{"id": uuid4()} for _ in range(3)]
-    as_user(make_me(True), [ids, [{"id": lottery_id}], []])
+    as_user(make_me(True), [[], ids, [{"id": lottery_id}], []])
     response = client.post("/api/lottery")
     assert response.status_code == 201
     assert response.json() == {"lottery_id": str(lottery_id)}
@@ -204,19 +211,30 @@ def test_delete_account_wrong_password(client, monkeypatch):
     assert admin.deleted == [] and conn.script == []
 
 
-def test_delete_account_without_active_lottery(client, monkeypatch):
+def test_delete_account_without_draw(client, monkeypatch):
     admin = delete_setup(monkeypatch)
-    me = make_me()
-    as_user(me, [[{"e": False}], [], []])
+    me = make_me(in_draw=False)
+    conn = as_user(me, [[], []])
     response = client.post("/api/me/delete", json={"password": "pw"})
     assert response.status_code == 204
     assert admin.deleted == [str(me.id)]
+    assert conn.script == []
 
 
-def test_delete_account_cancels_active_lottery(client, monkeypatch):
+def test_delete_account_member_cancels_lottery(client, monkeypatch):
+    admin = delete_setup(monkeypatch)
+    me = make_me()
+    conn = as_user(me, [[{"id": uuid4()}], [], [], [], [], []])
+    response = client.post("/api/me/delete", json={"password": "pw"})
+    assert response.status_code == 204
+    assert admin.deleted == [str(me.id)]
+    assert conn.script == []
+
+
+def test_delete_account_master_closes_draw(client, monkeypatch):
     admin = delete_setup(monkeypatch)
     me = make_me(is_master=True)
-    conn = as_user(me, [[{"e": True}], [{"id": uuid4()}], [], [], []])
+    conn = as_user(me, [[{"id": uuid4()}], [], [], [], [], [], []])
     response = client.post("/api/me/delete", json={"password": "pw"})
     assert response.status_code == 204
     assert admin.deleted == [str(me.id)]
@@ -227,7 +245,7 @@ def test_delete_account_auth_failure(client, monkeypatch):
     from supabase_auth.errors import AuthApiError
 
     delete_setup(monkeypatch, admin=FakeAdmin(AuthApiError("boom", 500, "unexpected_failure")))
-    as_user(make_me(), [[{"e": False}], [], []])
+    as_user(make_me(in_draw=False), [[], []])
     response = client.post("/api/me/delete", json={"password": "pw"})
     assert response.status_code == 502
     assert response.json()["detail"] == "delete_failed"
@@ -268,3 +286,113 @@ async def test_verify_password_upstream_error(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         await supabase_admin.verify_password("a@example.com", "pw")
     assert exc.value.status_code == 502
+
+
+def test_current_without_draw(client):
+    as_user(make_me(in_draw=False), [])
+    assert client.get("/api/lottery/current").json()["status"] == "no_draw"
+
+
+def test_master_endpoints_forbidden_without_draw(client):
+    as_user(make_me(in_draw=False), [])
+    assert client.post("/api/lottery").status_code == 403
+    assert client.get("/api/participants").status_code == 403
+
+
+def test_email_without_draw(client):
+    as_user(make_me(in_draw=False), [])
+    assert client.post("/api/lottery/current/email").status_code == 404
+
+
+def test_list_draws(client):
+    draw = {"id": uuid4(), "name": "Rodzina", "members": 2}
+    as_user(make_me(in_draw=False), [[draw]])
+    body = client.get("/api/draws").json()
+    assert body == [{**draw, "id": str(draw["id"])}]
+
+
+def test_create_draw(client):
+    draw_id = uuid4()
+    as_user(make_me(in_draw=False), [[{"id": draw_id, "name": "Rodzina"}], [{"id": uuid4()}], []])
+    response = client.post("/api/draws", json={"name": "  Rodzina "})
+    assert response.status_code == 201
+    assert response.json() == {"id": str(draw_id), "name": "Rodzina", "members": 1}
+
+
+def test_create_draw_when_already_in_draw(client):
+    as_user(make_me(), [])
+    response = client.post("/api/draws", json={"name": "Praca"})
+    assert response.status_code == 409
+    assert response.json()["detail"] == "already_in_draw"
+
+
+def test_create_draw_name_taken(client):
+    as_user(make_me(in_draw=False), [errors.UniqueViolation()])
+    response = client.post("/api/draws", json={"name": "Rodzina"})
+    assert response.status_code == 409
+    assert response.json()["detail"] == "draw_name_taken"
+
+
+def test_create_draw_name_limits(client):
+    as_user(make_me(in_draw=False), [])
+    assert client.post("/api/draws", json={"name": "a" * 51}).status_code == 422
+    assert client.post("/api/draws", json={"name": "   "}).status_code == 422
+    assert client.post("/api/draws", json={}).status_code == 422
+
+
+def test_join_draw(client):
+    as_user(make_me(in_draw=False), [[{"id": uuid4()}], [], [{"id": uuid4()}], []])
+    assert client.post(f"/api/draws/{uuid4()}/join").status_code == 204
+
+
+def test_join_when_already_in_draw(client):
+    as_user(make_me(), [])
+    response = client.post(f"/api/draws/{uuid4()}/join")
+    assert response.status_code == 409
+    assert response.json()["detail"] == "already_in_draw"
+
+
+def test_join_closed_draw(client):
+    as_user(make_me(in_draw=False), [[]])
+    response = client.post(f"/api/draws/{uuid4()}/join")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "draw_not_found"
+
+
+def test_join_draw_with_results(client):
+    as_user(make_me(in_draw=False), [[{"id": uuid4()}], [{"id": uuid4()}]])
+    response = client.post(f"/api/draws/{uuid4()}/join")
+    assert response.status_code == 409
+    assert response.json()["detail"] == "lottery_active"
+
+
+def test_join_race_already_in_draw(client):
+    as_user(make_me(in_draw=False), [[{"id": uuid4()}], [], []])
+    response = client.post(f"/api/draws/{uuid4()}/join")
+    assert response.status_code == 409
+    assert response.json()["detail"] == "already_in_draw"
+
+
+def test_leave_without_draw(client):
+    as_user(make_me(in_draw=False), [])
+    response = client.post("/api/me/draw/leave")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "not_in_draw"
+
+
+def test_member_leaves_without_results(client):
+    conn = as_user(make_me(), [[], [], []])
+    assert client.post("/api/me/draw/leave").status_code == 204
+    assert conn.script == []
+
+
+def test_member_leaves_and_cancels_results(client):
+    conn = as_user(make_me(), [[{"id": uuid4()}], [], [], []])
+    assert client.post("/api/me/draw/leave").status_code == 204
+    assert conn.script == []
+
+
+def test_master_leaves_and_closes_draw(client):
+    conn = as_user(make_me(is_master=True), [[{"id": uuid4()}], [], [], [], []])
+    assert client.post("/api/me/draw/leave").status_code == 204
+    assert conn.script == []
