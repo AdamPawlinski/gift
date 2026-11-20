@@ -13,8 +13,8 @@ Christmas gift lottery (Secret Santa). Users sign up and log in, one "lottery ma
   - `auth.py` verifies the Supabase JWT (JWKS, ES256) and provides `require_master`.
   - `supabase_admin.py` creates users through the admin API.
   - `draw.py` is the pairing algorithm. `email.py` sends mail through the Brevo HTTP API.
-  - `routers/auth.py`, `me.py`, `lottery.py`.
-- `supabase/migrations/`: schema (`0001_init.sql`, `0002_account_deletion.sql`); run them in order in the Supabase SQL editor.
+  - `routers/auth.py`, `me.py`, `draws.py`, `lottery.py`.
+- `supabase/migrations/`: schema (`0001_init.sql`, `0002_account_deletion.sql`, `0003_multiple_draws.sql`); run them in order in the Supabase SQL editor.
 - `vercel.json`: one Vercel project with two Services, `frontend` (static SPA) and `backend` (FastAPI). `/api/*` goes to the backend, everything else to the frontend.
 
 ## Commands
@@ -41,19 +41,20 @@ npx nuxi typecheck
 
 ## Data model
 
-- `profiles` (one per auth user: `username`, `is_master`), `lotteries` (`status`: `finished` or `cancelled`), `lottery_results` (giver, receiver), `lottery_logs` (every action with `lottery_id`).
-- Partial unique indexes enforce one master (`profiles_single_master`), one active lottery (`lotteries_single_active`) and unique usernames ignoring case (`profiles_username_ci`).
+- `draws` (named group, `name` 1-50 chars, `master_id`, `closed_at`), `profiles` (one per auth user: `username`, `draw_id`, `joined_at`; a user is in at most one draw), `lotteries` (one run of a draw, `draw_id`, `status`: `finished` or `cancelled`), `lottery_results` (giver, receiver), `lottery_logs` (every action with `lottery_id`).
+- Partial unique indexes enforce one active lottery per draw (`lotteries_single_active`), unique open draw names ignoring case (`draws_name_open_ci`) and unique usernames ignoring case (`profiles_username_ci`). The master is the user with `draws.master_id = profiles.id` for an open draw; there is no `is_master` column.
+- The creator of a draw is its master. When the master leaves (or deletes the account) the draw is closed for all members. When a member leaves, the active lottery of the draw is cancelled. Joining a draw that has results is not possible.
 - RLS is on with no policies, so only the backend (service role) reads and writes the tables. Public sign-up is disabled in Supabase; users are created through `POST /api/auth/register`.
-- Account deletion (`POST /me/delete`) is a tombstone: `profiles` keeps the id, but `username`/`email` become null, `is_master` false and `deleted_at` is set, and the auth user is deleted (the `profiles.id` foreign key to `auth.users` is dropped in `0002`). If the user was in the active lottery, it is cancelled for everyone. Deleted profiles are excluded from login (`get_current_profile`), the participant list and the draw.
+- Account deletion (`POST /me/delete`) is a tombstone: `profiles` keeps the id, but `username`/`email` become null, `is_master` false and `deleted_at` is set, and the auth user is deleted (the `profiles.id` foreign key to `auth.users` is dropped in `0002`). The user leaves the draw first (see above). Deleted profiles are excluded from login (`get_current_profile`), the participant list and the draw.
 - Cancelling a lottery is a soft cancel (status `cancelled`), so old ids and logs stay queryable.
 
 ## API (prefix `/api`)
 
-`GET /health`, `GET /auth/master-available`, `POST /auth/register` (409: `email_taken`, `username_taken`, `master_taken`), `GET /me`, `POST /me/delete` (body `password`; 403 `wrong_password`, 502 `delete_failed`/`auth_failed`), `GET /lottery/current`, `GET /participants` (master), `POST /lottery` (master; 400 `not_enough_participants`, 409 `lottery_active`), `DELETE /lottery/current` (master), `POST /lottery/current/email` (404 `no_result`, 429 `rate_limited`, 502 `email_failed`).
+`GET /health`, `POST /auth/register` (409: `email_taken`, `username_taken`), `GET /me`, `GET /draws` (open draws without results), `POST /draws` (body `name`; 409 `already_in_draw`, `draw_name_taken`), `POST /draws/{id}/join` (404 `draw_not_found`; 409 `already_in_draw`, `lottery_active`), `POST /me/draw/leave` (404 `not_in_draw`), `POST /me/delete` (body `password`; 403 `wrong_password`, 502 `delete_failed`/`auth_failed`), `GET /lottery/current`, `GET /participants` (master), `POST /lottery` (master; 400 `not_enough_participants`, 409 `lottery_active`), `DELETE /lottery/current` (master), `POST /lottery/current/email` (404 `no_result`, 429 `rate_limited`, 502 `email_failed`).
 
 ## Gotchas
 
-- Everyone, including the master, takes part in the draw. Users registering after the draw are not in it.
+- Everyone in a draw, including the master, takes part in its lottery. Nobody can join after the lottery ran.
 - Test emails must use a real-looking domain such as `example.com`; `.test` is rejected by validation.
 - Emails need Brevo configured, otherwise the email endpoint returns 502.
 - Backend tests use a scripted fake DB connection and dummy env vars (`tests/conftest.py`); they don't touch Supabase.

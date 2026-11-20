@@ -14,8 +14,10 @@ from app.schemas import LotteryCreated, LotteryCurrent, Me, Participant
 router = APIRouter(tags=["lottery"])
 
 
-async def _active_lottery_id(conn: AsyncConnection) -> UUID | None:
-    cur = await conn.execute("select id from lotteries where status = 'finished'")
+async def active_lottery_id(conn: AsyncConnection, draw_id: UUID) -> UUID | None:
+    cur = await conn.execute(
+        "select id from lotteries where status = 'finished' and draw_id = %s", (draw_id,)
+    )
     row = await cur.fetchone()
     return row["id"] if row else None
 
@@ -35,7 +37,9 @@ async def _receiver_username(conn: AsyncConnection, lottery_id: UUID, giver_id: 
 async def current_lottery(
     profile: Me = Depends(get_current_profile), conn: AsyncConnection = Depends(get_conn)
 ):
-    lottery_id = await _active_lottery_id(conn)
+    if profile.draw_id is None:
+        return LotteryCurrent(status="no_draw")
+    lottery_id = await active_lottery_id(conn, profile.draw_id)
     if lottery_id is None:
         return LotteryCurrent(status="not_started")
     receiver = await _receiver_username(conn, lottery_id, profile.id)
@@ -48,8 +52,14 @@ async def current_lottery(
 
 
 @router.get("/participants", response_model=list[Participant])
-async def participants(_: Me = Depends(require_master), conn: AsyncConnection = Depends(get_conn)):
-    cur = await conn.execute("select username from profiles where deleted_at is null order by created_at")
+async def participants(
+    master: Me = Depends(require_master), conn: AsyncConnection = Depends(get_conn)
+):
+    cur = await conn.execute(
+        "select username from profiles where draw_id = %s and deleted_at is null"
+        " order by joined_at",
+        (master.draw_id,),
+    )
     return await cur.fetchall()
 
 
@@ -59,8 +69,13 @@ async def start_lottery(
     conn: AsyncConnection = Depends(get_conn),
     settings: Settings = Depends(get_settings),
 ):
-    # Lock the profiles so nobody registers between reading the list and drawing.
-    cur = await conn.execute("select id from profiles where deleted_at is null order by created_at for update")
+    # Lock the draw so nobody joins between reading the members and drawing.
+    await conn.execute("select id from draws where id = %s for update", (master.draw_id,))
+    cur = await conn.execute(
+        "select id from profiles where draw_id = %s and deleted_at is null"
+        " order by joined_at for update",
+        (master.draw_id,),
+    )
     ids = [row["id"] for row in await cur.fetchall()]
     if len(ids) < max(settings.min_participants, 2):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "not_enough_participants")
@@ -69,8 +84,9 @@ async def start_lottery(
     try:
         async with conn.transaction():
             cur = await conn.execute(
-                "insert into lotteries (status, started_by) values ('finished', %s) returning id",
-                (master.id,),
+                "insert into lotteries (status, started_by, draw_id)"
+                " values ('finished', %s, %s) returning id",
+                (master.id, master.draw_id),
             )
             lottery_id = (await cur.fetchone())["id"]
             async with conn.cursor() as c:
@@ -80,9 +96,9 @@ async def start_lottery(
                     [(lottery_id, giver, receiver) for giver, receiver in pairs.items()],
                 )
             await conn.execute(
-                "insert into lottery_logs (lottery_id, actor_id, action, details)"
-                " values (%s, %s, 'lottery_started', %s)",
-                (lottery_id, master.id, Jsonb({"participants": len(ids)})),
+                "insert into lottery_logs (lottery_id, draw_id, actor_id, action, details)"
+                " values (%s, %s, %s, 'lottery_started', %s)",
+                (lottery_id, master.draw_id, master.id, Jsonb({"participants": len(ids)})),
             )
     except errors.UniqueViolation:
         raise HTTPException(status.HTTP_409_CONFLICT, "lottery_active") from None
@@ -90,20 +106,20 @@ async def start_lottery(
 
 
 async def cancel_active_lottery(
-    conn: AsyncConnection, actor_id: UUID, details: dict | None = None
+    conn: AsyncConnection, draw_id: UUID, actor_id: UUID, details: dict | None = None
 ) -> UUID | None:
     cur = await conn.execute(
         "update lotteries set status = 'cancelled', cancelled_by = %s, cancelled_at = now()"
-        " where status = 'finished' returning id",
-        (actor_id,),
+        " where status = 'finished' and draw_id = %s returning id",
+        (actor_id, draw_id),
     )
     row = await cur.fetchone()
     if row is None:
         return None
     await conn.execute(
-        "insert into lottery_logs (lottery_id, actor_id, action, details)"
-        " values (%s, %s, 'lottery_cancelled', %s)",
-        (row["id"], actor_id, Jsonb(details or {})),
+        "insert into lottery_logs (lottery_id, draw_id, actor_id, action, details)"
+        " values (%s, %s, %s, 'lottery_cancelled', %s)",
+        (row["id"], draw_id, actor_id, Jsonb(details or {})),
     )
     return row["id"]
 
@@ -112,7 +128,7 @@ async def cancel_active_lottery(
 async def cancel_lottery(
     master: Me = Depends(require_master), conn: AsyncConnection = Depends(get_conn)
 ):
-    if await cancel_active_lottery(conn, master.id) is None:
+    if await cancel_active_lottery(conn, master.draw_id, master.id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no_active_lottery")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -123,7 +139,7 @@ async def email_result(
     conn: AsyncConnection = Depends(get_conn),
     settings: Settings = Depends(get_settings),
 ):
-    lottery_id = await _active_lottery_id(conn)
+    lottery_id = await active_lottery_id(conn, profile.draw_id) if profile.draw_id else None
     receiver = await _receiver_username(conn, lottery_id, profile.id) if lottery_id else None
     if receiver is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no_result")
@@ -139,7 +155,8 @@ async def email_result(
 
     await email.send_result(profile.email, profile.username, receiver)
     await conn.execute(
-        "insert into lottery_logs (lottery_id, actor_id, action) values (%s, %s, 'result_email_sent')",
-        (lottery_id, profile.id),
+        "insert into lottery_logs (lottery_id, draw_id, actor_id, action)"
+        " values (%s, %s, %s, 'result_email_sent')",
+        (lottery_id, profile.draw_id, profile.id),
     )
     return {"status": "sent"}

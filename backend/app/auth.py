@@ -47,8 +47,11 @@ async def get_current_profile(
     conn: AsyncConnection = Depends(get_conn),
 ) -> Me:
     cur = await conn.execute(
-        "select id, username, email, is_master from profiles"
-        " where id = %s and deleted_at is null", (user_id,)
+        "select p.id, p.username, p.email, d.id as draw_id, d.name as draw_name,"
+        " coalesce(d.master_id = p.id, false) as is_master"
+        " from profiles p left join draws d on d.id = p.draw_id and d.closed_at is null"
+        " where p.id = %s and p.deleted_at is null",
+        (user_id,),
     )
     row = await cur.fetchone()
     if row is None:
